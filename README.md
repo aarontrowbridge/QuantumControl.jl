@@ -12,6 +12,8 @@ to use this package, clone it, and then, from a julia REPL in the cloned directo
 
 `(QuantumControl) pkg> instantiate`
 
+one should have a python environment containing scipy and qutip (this can be achieved with conda, by activating the environment before running the julia scripts.
+
 ## usage
 
 right now, all that is implemented is 
