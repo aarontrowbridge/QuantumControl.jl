@@ -6,9 +6,10 @@ the goal is to do multi-qubit quantum optimal control quickly and robustly.
 
 ## installation
 
-to use this package, clone it, and then, from the cloned directory in a julia REPL run
+to use this package, clone it, and then, from a julia REPL in the cloned directory run
 
 `(@v1.7) pkg> activate .`
+
 `(QuantumControl) pkg> instantiate`
 
 ## usage
