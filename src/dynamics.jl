@@ -19,17 +19,20 @@ import TrajectoryOptimization as TO
 RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
     nqubits::Int
     nstates::Int
+    # qstates::SVector{N, SVector{M, T}} where {N, M, T}
+    nqstates::Int
     H_drift::SMatrix{n} where {n}
     H_drive::SMatrix{m} where {m}
 
     function MultiQubitSystem(
         H_drift::SMatrix{n} where {n},
-        H_drive::SMatrix{m} where {m}
+        H_drive::SMatrix{m} where {m},
+        nqstates::Int
         )
         nqubits = Int(log2(size(H_drift)[1]))
-        nstates = 2^nqubits * 2
+        nstates = nqstates * 2^nqubits * 2
         return new{typeof(H_drift)}(
-            nqubits, nstates, H_drift, H_drive
+            nqubits, nstates, nqstates, H_drift, H_drive
         )
     end
 end
@@ -41,7 +44,7 @@ RD.state_dim(model::MultiQubitSystem) = model.nstates + 3
 RD.control_dim(::MultiQubitSystem) = 1
 
 function RD.dynamics!(model::MultiQubitSystem, xdot, x, u)
-    nstates = nstates(model)
+    nstates = model.nstates
 
     ∫a, a, da = x[(nstates+1):(nstates+3)]
     dda = u[1]
@@ -49,30 +52,32 @@ function RD.dynamics!(model::MultiQubitSystem, xdot, x, u)
 
     H = model.H_drift + a * model.H_drive
 
-    ψ = getqstate(model, x)
+    for i = 1:model.nqstates
+        ψ = getqstate(model, x, i)
 
-    ψdot = -im * H * ψ
+        ψdot = -im * H * ψ
 
-    setqstate!(model, xdot, ψdot)
+        setqstate!(model, xdot, ψdot, i)
+    end
 
     xdot[(nstates+1):(nstates+3)] = [a, da, dda]
 
     return nothing
 end
 
-function getqstate(model::MultiQubitSystem, x)
-    nstates = model.nstates
-    ψreal = x[1:div(nstates, 2)]
-    ψimag = x[div(nstates, 2)+1:nstates]
+function getqstate(model::MultiQubitSystem, x, i)
+    iso_dim = div(model.nstates, model.nqstates)
+    ψreal = x[(1 + (i - 1) * iso_dim ):(i * div(iso_dim, 2))]
+    ψimag = x[(div(iso_dim, 2) + 1):(i * iso_dim)]
     ψ = SA[(ψreal + im * ψimag)...]
     return ψ
 end
 
-function setqstate!(model::MultiQubitSystem, x, ψ)
-    nstates = model.nstates
-    for i in 1:div(nstates, 2)
-        x[i] = real(ψ[i])
-        x[nstates + i] = imag(ψ[i])
+function setqstate!(model::MultiQubitSystem, x, ψ, i)
+    iso_dim = div(model.nstates, model.nqstates)
+    for j in 1:div(iso_dim, 2)
+        x[(i - 1) * iso_dim + j] = real(ψ[j])
+        x[(i - 1) * iso_dim + div(iso_dim, 2) + j] = imag(ψ[j])
     end
 end
 
