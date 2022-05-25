@@ -6,7 +6,7 @@ export load_qutip_object
 export get_qutip_matrix
 
 # using Pkg
-# ENV["PYTHON"] = "/Users/aaron/miniconda3/envs/QOC/bin/python"
+# ENV["PYTHON"] = "/home/aaron/miniconda3/envs/QOC/bin/python"
 # Pkg.build("PyCall")
 
 using PyCall
@@ -14,12 +14,12 @@ using PyCall
 # @pyimport qutip as qt
 # @pyimport scipy.sparse as sp
 
-const sp = PyNULL()
 const qt = PyNULL()
+const sp = PyNULL()
 
 function __init__()
-    copy!(sp, pyimport_conda("scipy.sparse", "scipy"))
     copy!(qt, pyimport_conda("qutip", "qutip"))
+    copy!(sp, pyimport_conda("scipy.sparse", "scipy"))
 end
 
 using StaticArrays

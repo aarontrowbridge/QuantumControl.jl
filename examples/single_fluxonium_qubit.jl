@@ -5,7 +5,6 @@ using RobotDynamics
 using LinearAlgebra
 using StaticArrays
 using Random
-using Plots
 
 import TrajectoryOptimization as TO
 import RobotDynamics as RD
@@ -20,7 +19,7 @@ H_drive = get_qutip_matrix(H_drive_path)
 
 nqstates = 1
 
-model = MultiQubitSystem(H_drift, H_drive, nqstates)
+model = MultiQubitSystem(H_drift, H_drive, nqstates; isodynamics=false)
 
 dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
 
@@ -51,6 +50,8 @@ solver = ALTROSolver(prob; verbose=true, projected_newton=true)
 
 solve!(solver)
 
+println("solved!")
+
 X̃ = states(solver)
 X = zeros(4,N)
 U = zeros(N)
@@ -61,8 +62,11 @@ for k = 1:N
       U̇[k] = X̃[k][5]
 end
 
-plot(X',xlabel="time step",title="State Trajectory",label=["Re(x1)" "Im(x1)" "Re(x2)" "Im(x2)"])
-plot(U,xlabel="time step",title="Control Trajectory",label="u")
-plot(U̇,xlabel="time step",title="Control Trajectory",label="udot")
+using Plots
 
-model.iso_dim
+plot(X',xlabel="time step",title="State Trajectory",label=["Re(x1)" "Im(x1)" "Re(x2)" "Im(x2)"])
+savefig("plots/single_fluxonium_qubit_state_trajectory.png")
+plot(U,xlabel="time step",title="Control Trajectory",label="u")
+savefig("plots/single_fluxonium_qubit_control_trajectory.png")
+plot(U̇,xlabel="time step",title="Control Trajectory",label="udot")
+savefig("plots/single_fluxonium_qubit_control_derivative_trajectory.png")
