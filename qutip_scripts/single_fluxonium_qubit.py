@@ -1,6 +1,7 @@
 from qutip import sigmax, sigmaz, qsave
 
 fq = 1 / (72 * 1e-9) 
+# fq = 1
 
 H_drift = fq * sigmaz()
 H_drive = sigmax()

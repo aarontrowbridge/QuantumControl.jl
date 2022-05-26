@@ -19,7 +19,7 @@ H_drive = get_qutip_matrix(H_drive_path)
 
 nqstates = 1
 
-model = MultiQubitSystem(H_drift, H_drive, nqstates; isodynamics=false)
+model = MultiQubitSystem(H_drift, H_drive, nqstates)
 
 dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
 
@@ -27,39 +27,59 @@ dt = 0.01 # time step
 N = 101 # number of knot points
 tf = dt * (N - 1) # final time
 
-x0 = SA[1.0, 0, 0, 0, 0, 0, 0]
-xf = SA[1/sqrt(2), 0, 1/sqrt(2), 0, 0, 0, 0]
-
 n, m = RD.dims(model)
 
+nd = n - model.nstates
+
+# Set initial and final states
+q0 = @SVector [1.0,  0, 0,    0] # initial quaternion
+qf = @SVector [1/√2, 0, 1/√2, 0] # final quaternion
+
+# ∫a, a, da should start and stop at 0
+x0 = [q0; @SVector zeros(nd)]
+xf = [qf; @SVector zeros(nd)]
+
+# random initial guess for control inputs
+U0 = [@SVector randn(m) for k = 1:N-1]
+
 #Set up quadratic objective function
-Q = 0.001 * Diagonal(@SVector ones(n))
-R = 10.0 * Diagonal(@SVector ones(m))
-Qf = 1.0 * Diagonal(@SVector ones(n))
-obj = LQRObjective(Q,R,Qf,xf,N);
+Q = Diagonal(@SVector fill(1.0, n))
+R = Diagonal(@SVector fill(0.1, m))
+Qf = 100 * Q
+obj = LQRObjective(Q, R, Qf, xf, N, checks=false);
 
-#Set up input constriants
-goal = GoalConstraint(xf)
-# con_goal = ConstraintVals(goal, N:N)
-con_list = ConstraintList(n, m, N)
-add_constraint!(con_list, goal, N)
+# penalize control at first and last time step more
+costfun = LQRCost(Q, 100 * R, xf)
+obj.cost[1] = costfun
+obj.cost[N-1] = costfun
 
-prob = Problem(dmodel, obj, x0, tf; constraints=con_list)
+
+# set up contraints
+cons = ConstraintList(n, m, N)
+
+# final goal
+# goalcon = GoalConstraint(xf)
+# add_constraint!(cons, goalcon, N)
+
+# maintain normalized statevector
+normcon = NormConstraint(n, m, 1.0, Equality(), :state)
+add_constraint!(cons, normcon, N)
+
+prob = Problem(dmodel, obj, x0, tf; constraints=cons, U0=U0, xf=xf)
 
 solver = ALTROSolver(prob; verbose=true, projected_newton=true)
 
 solve!(solver)
 
-println("solved!")
-
 X̃ = states(solver)
 X = zeros(4,N)
 U = zeros(N)
 U̇ = zeros(N)
+
 for k = 1:N
-      X[:,k] = X̃[k][1:4]
-      U[k] = X̃[k][6]
-      U̇[k] = X̃[k][5]
+    X[:,k] = X̃[k][1:4]
+    U[k] = X̃[k][6]
+    U̇[k] = X̃[k][5]
 end
 
 using Plots
