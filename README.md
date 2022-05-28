@@ -30,12 +30,23 @@ $$
 i \hbar \partial_t \ket{\psi} = \hat H \ket{\psi}
 $$
 
+## example: single fluxonium qubit
+
+[](plots/single_fluxonium_qubit.png)
+
+The above plot shows the dynamics for the wavefunction and control $a(t)$ s.t. 
+
+$$
+\ket{0} \to X \ket{0} = \ket{1}
+$$
+
+
 
 ## TODO:
 
 - [ ] multistate single qubit script
 - [ ] scripts for X, Y, Z gates
-- [ ] add functionality to define $\ket{\psi_1_i}$ and $\ket{\psi_N^i}$ as complex vectors 
+- [ ] add functionality to define $\ket{\psi_1^i}$ and $\ket{\psi_T^i}$ as complex vectors 
 - [ ] add plotting utilities
   - [ ] multistate
   - [ ] multigate
