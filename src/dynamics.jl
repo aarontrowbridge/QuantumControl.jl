@@ -3,23 +3,19 @@ module Dynamics
 export MultiQubitSystem
 export state_dim
 export control_dim
-export dynamics!
 
-
-using RobotDynamics
-using TrajectoryOptimization
 using LinearAlgebra
 using StaticArrays
 using ForwardDiff
 using FiniteDiff
 
 import RobotDynamics as RD
-import TrajectoryOptimization as TO
 
 RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
     nqubits::Int
     nstates::Int
     nqstates::Int
+    ctrl_order::Int
     isodim::Int
     isodynamics::Bool
     H_drift::SMatrix{n} where n
@@ -28,35 +24,29 @@ RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
     function MultiQubitSystem(
         H_drift::SMatrix{n} where n,
         H_drive::SMatrix{m} where m,
-        nqstates::Int;
+        nqstates::Int,
+        ctrl_order::Int;
         isodynamics=true
     )
         nqubits = Int(log2(size(H_drift)[1]))
-        isodim = 2^nqubits * 2
+        isodim = 2 * 2^nqubits # (C²)^(⊗n) ≅ C^(2ⁿ) ≅ R^(2⋅2ⁿ)
         nstates = nqstates * isodim
         return new{typeof(H_drift)}(
-            nqubits, nstates, nqstates, isodim, isodynamics, H_drift, H_drive
+            nqubits, nstates, nqstates, ctrl_order, isodim, isodynamics, H_drift, H_drive
         )
     end
 end
 
-# state dim isomorphisms (C²)^(⨂ⁿ) ≅ C^(2ⁿ) ≅ R^(2⋅2ⁿ)
-RD.state_dim(model::MultiQubitSystem) = model.nstates + 3
-
-# single control dimension
+RD.state_dim(model::MultiQubitSystem) = model.nstates + model.ctrl_order + 1
 RD.control_dim(::MultiQubitSystem) = 1
 
+# for some reason, in-place dynamics is not working
 function RD.dynamics!(model::MultiQubitSystem, ẋ, x, u)
-    nstates = model.nstates
-
-    ctrl_inds = (nstates + 1):(nstates + 3)
+    ctrl_inds = (model.nstates + 1):(model.nstates + model.ctrl_order + 1)
     ∫a, a, da = x[ctrl_inds]
     dda = u[1]
-
-    xdot[ctrl_inds] .= [a, da, dda]
-
+    ẋ[ctrl_inds] .= [a, da, dda]
     H = model.H_drift + a * model.H_drive
-
     if model.isodynamics
         isoschroedinger!(ẋ, x, H, model.nqstates, model.isodim)
     else
@@ -66,38 +56,39 @@ end
 
 function RD.dynamics(model::MultiQubitSystem, x, u)
     ẋ = similar(x)
-
-    nstates = model.nstates
-
-    ctrl_inds = (nstates + 1):(nstates + 3)
-    ∫a, a, da = x[ctrl_inds]
-    dda = u[1]
-
-    ẋ[ctrl_inds] .= [a, da, dda]
-
+    ctrl_inds = (model.nstates + 1):(model.nstates + model.ctrl_order + 1)
+    ∫a, a, ȧ = x[ctrl_inds]
+    ä = u[1]
+    ẋ[ctrl_inds] .= [a, ȧ, ä]
     H = model.H_drift + a * model.H_drive
-
     if model.isodynamics
         isoschroedinger!(ẋ, x, H, model.nqstates, model.isodim)
     else
         schroedinger!(ẋ, x, H, model.nqstates, model.isodim)
     end
-
-    return SVector{nstates+3}(ẋ)
+    return ẋ
 end
 
 const Id2 = SMatrix{2,2}(I(2))
-const im2 = SMatrix{2,2}([0 1; -1 0])
+const im2 = SMatrix{2,2}([0 -1; 1 0])
+
+⊗(A, B) = kron(A, B)
 
 function isoschroedinger!(ẋ, x, H, nqstates, isodim)
     Hreal = real(H)
     Himag = imag(H)
+    opr = Id2 ⊗ Himag - im2 ⊗ Hreal # this is isomorphism of -iH
     for i = 1:nqstates
-        ψiso = x[(1 + (i - 1) * isodim):(i * isodim)]
-        ψ̇iso = (kron(Id2, Himag) + kron(im2, Hreal)) * ψiso
-        ẋ[(1 + (i - 1) * isodim):(i * isodim)] .= ψ̇iso
+        ψ̃ = x[(1 + (i - 1) * isodim):(i * isodim)]
+        ψ̃dot = opr * ψ̃
+        ẋ[(1 + (i - 1) * isodim):(i * isodim)] .= ψ̃dot
     end
 end
+
+#
+# below, direct schroedinger does not work with autodiff
+# need to implment RD.jacobian!
+#
 
 function schroedinger!(ẋ, x, H, nqstates, isodim)
     for i = 1:nqstates

@@ -5,14 +5,9 @@ export py_sparse_matrix_to_julia
 export load_qutip_object
 export get_qutip_matrix
 
-# using Pkg
-# ENV["PYTHON"] = "/home/aaron/miniconda3/envs/QOC/bin/python"
-# Pkg.build("PyCall")
-
+using StaticArrays
+using SparseArrays
 using PyCall
-
-# @pyimport qutip as qt
-# @pyimport scipy.sparse as sp
 
 const qt = PyNULL()
 const sp = PyNULL()
@@ -21,9 +16,6 @@ function __init__()
     copy!(qt, pyimport_conda("qutip", "qutip"))
     copy!(sp, pyimport_conda("scipy.sparse", "scipy"))
 end
-
-using StaticArrays
-using SparseArrays
 
 function py_sparse_matrix_to_julia(A; to_static=true)
     A = sp.csc_matrix(A)
@@ -51,12 +43,5 @@ function get_qutip_matrix(path::String; to_static=true)
                                           to_static=to_static)
     return jl_matrix
 end
-
-
-# sx = qt.sigmax()
-
-# sx_jl = py_sparse_matrix_to_julia(sx.data)
-
-# sx_jl
 
 end

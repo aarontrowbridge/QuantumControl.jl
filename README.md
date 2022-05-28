@@ -29,3 +29,19 @@ in the future this section will discuss the theory of QOC. for now I will just d
 $$
 i \hbar \partial_t \ket{\psi} = \hat H \ket{\psi}
 $$
+
+
+## TODO:
+
+- [ ] multistate single qubit script
+- [ ] scripts for X, Y, Z gates
+- [ ] add functionality to define $\ket{\psi_1_i}$ and $\ket{\psi_N^i}$ as complex vectors 
+- [ ] add plotting utilities
+  - [ ] multistate
+  - [ ] multigate
+  - [ ] block sphere path (single qubit case)
+- [ ] two qubit problem
+- [ ] README
+  - [ ] expand usage section
+  - [ ] theory section
+ 
