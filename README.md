@@ -46,7 +46,7 @@ $$
 
 - [ ] multistate single qubit script
 - [ ] scripts for X, Y, Z gates
-- [ ] add functionality to define $\ket{\psi_1^i}$ and $\ket{\psi_T^i}$ as complex vectors 
+- [ ] add functionality to define wavefunctions as complex vectors 
 - [ ] add plotting utilities
   - [ ] multistate
   - [ ] multigate
