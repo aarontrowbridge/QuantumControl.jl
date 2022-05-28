@@ -32,7 +32,7 @@ $$
 
 ## example: single fluxonium qubit
 
-[](plots/single_fluxonium_qubit.png)
+![](plots/single_fluxonium_qubit.png)
 
 The above plot shows the dynamics for the wavefunction and control $a(t)$ s.t. 
 
