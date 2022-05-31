@@ -27,6 +27,7 @@ function SingleQubitProblem(
     Rᵢᵢ=0.1,                    # diagonal cost for control
     Qfᵢᵢ=100.0,                 # diagonal cost for final state
     ctrl_cost_multiplier=100.0, # cost multiplier for control
+    U0=nothing,                 # initial control input
     U0_multiplier=1.0,          # initial random decision variable multiplier
 )
     # final time
@@ -44,7 +45,9 @@ function SingleQubitProblem(
     xf = SVector{n}([ψ̃f; cf])
 
     # random initial guess for control inputs
-    U0 = [U0_multiplier * @SVector randn(m) for _ = 1:N-1]
+    if U0 === nothing
+        U0 = [U0_multiplier * @SVector randn(m) for _ = 1:N-1]
+    end
 
     # set up quadratic objective function
     Q = Diagonal(@SVector fill(Qᵢᵢ, n))
@@ -61,30 +64,25 @@ function SingleQubitProblem(
     cons = ConstraintList(n, m, N)
 
     # constraint: maintain normalized quantum statevectors
-    normcon = NormConstraint(n, m, 1.0*model.nqstates, Equality(), 1:model.nstates)
-    add_constraint!(cons, normcon, N)
+    for i = 1:model.nqstates
+        ψ̃ᵢnormcon = NormConstraint(n, m, 1.0, Equality(), 1+(i-1)*model.isodim:i*model.isodim)
+        add_constraint!(cons, ψ̃ᵢnormcon, N)
+    end
 
     # constraint: bound control variable |aₖ| ≤ 0.5 GHz
     aboundcon = NormConstraint(n, m, 0.5e9, Inequality(), [model.nstates + 2])
     add_constraint!(cons, aboundcon, N)
 
-    # # constraint: set goal for ∫a₁ = a₁ = ȧ₁ = 0
-    # a₁goalcon = GoalConstraint(x0, model.nstates+1:model.nstates+order+1)
-    # add_constraint!(cons, a₁goalcon, N)
-
     # constraint: set goal for ∫aₙ = aₙ = 0
-    aₙgoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+order)
-    add_constraint!(cons, aₙgoalcon, N)
+    agoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+order)
+    add_constraint!(cons, agoalcon, N)
 
     # constraint: set goal for |ψⁱₙ⟩ = |ψⁱfinal⟩
-    ψgoalcon = GoalConstraint(xf, 1:model.nstates)
-    add_constraint!(cons, ψgoalcon, N)
+    # ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
+    # add_constraint!(cons, ψ̃goalcon, N)
 
     return Problem(dmodel, obj, x0, tf; xf=xf, constraints=cons, U0=U0)
 end
-
-
-
 
 
 
