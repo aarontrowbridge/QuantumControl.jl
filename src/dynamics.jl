@@ -74,10 +74,10 @@ function schroedinger!(ẋ, x, H, nqstates, isodim)
     end
 end
 
-function simulate(model, x0, U, t, dt, N)
+function simulate(dmodel, x0, U, t, dt, N)
     X = [x0]
     for i = 2:N
-        push!(X, RD.discrete_dynamics(model, X[i-1], U[i-1], t[i-1], dt))
+        push!(X, RD.discrete_dynamics(dmodel, X[i-1], U[i-1], t[i-1], dt))
     end
     return X
 end
