@@ -48,7 +48,7 @@ $$
 - [ ] scripts for X, Y, Z gates
 - [ ] add functionality to define wavefunctions as complex vectors 
 - [ ] add plotting utilities
-  - [ ] multistate
+  - [x] multistate
   - [ ] multigate
   - [ ] block sphere path (single qubit case)
 - [ ] two qubit problem
