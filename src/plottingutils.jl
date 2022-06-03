@@ -83,10 +83,17 @@ function plot_wfn(solver, filename, idx=1)
 end
 
 # plot two wavefunctions
-function plot_two_wfns(solver, filename, idxs=[1,2]; show_ctrl=false)
+
+function plot_two_wfns(solver::ALTROSolver, filename, idxs=[1,2]; show_dec=false)
     X = states(solver)
     t = gettimes(solver)
+    if show_dec
+        U = controls(solver)
+    end
+    plot_two_wfns(X, t, filename, idxs; show_dec=show_dec, U=U)
+end
 
+function plot_two_wfns(X, t, filename, idxs=[1,2]; show_dec=false, U=nothing)
     N = length(X)
 
     ψ̃₁ = zeros(4, N)
@@ -97,7 +104,7 @@ function plot_two_wfns(solver, filename, idxs=[1,2]; show_ctrl=false)
         ψ̃₂[:,k] = X[k][1 + (idxs[2] - 1)*4:idxs[2]*4]
     end
 
-    if !show_ctrl
+    if !show_dec
         fig = Figure(resolution=(1200, 500))
     else
         fig = Figure(resolution=(1200, 1000))
@@ -118,17 +125,16 @@ function plot_two_wfns(solver, filename, idxs=[1,2]; show_ctrl=false)
                                 L"\mathrm{Im} (\psi_1)"])
     axislegend(ax2; position=:cb)
 
-    if show_ctrl
-        U = controls(solver)
-        a = zeros(N)
+    if show_dec
+        ä = zeros(N)
 
         for k = 1:N-1
-            a[k+1] = U[k][1]
+            ä[k+1] = U[k][1]
         end
 
-        ax3 = Axis(fig[2, 1]; title="control variable", xlabel=L"t")
+        ax3 = Axis(fig[2, 1]; title="decision variable", xlabel=L"t")
 
-        lines!(ax3, t, a; label=L"a(t)")
+        lines!(ax3, t, ä; label=L"\frac{d^2a}{dt^2}(t)")
         axislegend(ax3; position=:rt)
     end
 

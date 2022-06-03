@@ -18,9 +18,8 @@ function SingleQubitProblem(
     nqstates,                   # number of quantum states
     ψ̃0,                         # initial quantum state isomorphism
     ψ̃f;                         # final quantum state isomorphism
-    order=2,                    # derivative order of decision variable (dda)
-    c0=zeros(order+1),          # initial control input (∫a, a, ȧ) .= 0
-    cf=zeros(order+1),          # final control input (∫a, a, ȧ) .= 0
+    c0=zeros(3),                # initial control input (∫a, a, ȧ) .= 0
+    cf=zeros(3),                # final control input (∫a, a, ȧ) .= 0
     dt=0.01,                    # time step
     N=101,                      # number of knot points
     Qᵢᵢ=1.0,                    # diagonal cost for state
@@ -34,7 +33,7 @@ function SingleQubitProblem(
     tf = dt * (N - 1)
 
     # build model from Hamiltonians
-    model = MultiQubitSystem(H_drift, H_drive, nqstates, order)
+    model = MultiQubitSystem(H_drift, H_drive, nqstates)
     n, m = RD.dims(model)
 
     # discretize model
@@ -63,19 +62,13 @@ function SingleQubitProblem(
     # set up contraints
     cons = ConstraintList(n, m, N)
 
-    # constraint: maintain normalized quantum statevectors
-    for i = 1:model.nqstates
-        ψ̃ᵢnormcon = NormConstraint(n, m, 1.0, Equality(), 1+(i-1)*model.isodim:i*model.isodim)
-        add_constraint!(cons, ψ̃ᵢnormcon, N)
-    end
-
     # constraint: bound control variable |aₖ| ≤ 0.5 GHz
     aboundcon = NormConstraint(n, m, 0.5e9, Inequality(), [model.nstates + 2])
     add_constraint!(cons, aboundcon, N)
 
     # constraint: set goal for ∫aₙ = aₙ = 0
-    agoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+order)
-    add_constraint!(cons, agoalcon, N)
+    # agoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+2)
+    # add_constraint!(cons, agoalcon, N)
 
     # constraint: set goal for |ψⁱₙ⟩ = |ψⁱfinal⟩
     # ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
