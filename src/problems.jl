@@ -13,21 +13,24 @@ using Random
 import RobotDynamics as RD
 
 function SingleQubitProblem(
-    H_drift,                    # drift Hamiltonian
-    H_drive,                    # drive Hamiltonian
-    nqstates,                   # number of quantum states
-    ψ̃0,                         # initial quantum state isomorphism
-    ψ̃f;                         # final quantum state isomorphism
-    c0=zeros(3),                # initial control input (∫a, a, ȧ) .= 0
-    cf=zeros(3),                # final control input (∫a, a, ȧ) .= 0
-    dt=0.01,                    # time step
-    N=101,                      # number of knot points
-    Qᵢᵢ=1.0,                    # diagonal cost for state
-    Rᵢᵢ=0.1,                    # diagonal cost for control
-    Qfᵢᵢ=100.0,                 # diagonal cost for final state
-    ctrl_cost_multiplier=100.0, # cost multiplier for control
-    U0=nothing,                 # initial control input
-    U0_multiplier=1.0,          # initial random decision variable multiplier
+    H_drift,                     # drift Hamiltonian
+    H_drive,                     # drive Hamiltonian
+    nqstates,                    # number of quantum states
+    ψ̃0,                          # initial quantum state isomorphism
+    ψ̃f;                          # final quantum state isomorphism
+    c0=zeros(3),                 # initial control input (∫a, a, ȧ) .= 0
+    cf=zeros(3),                 # final control input (∫a, a, ȧ) .= 0
+    dt=0.01,                     # time step
+    N=101,                       # number of knot points
+    Qᵢᵢ=1.0,                     # diagonal cost for state
+    Rᵢᵢ=0.1,                     # diagonal cost for control
+    state_cost_multiplier=100.0, # diagonal cost for final state
+    ctrl_cost_multiplier=100.0,  # cost multiplier for control
+    U0=nothing,                  # initial control input
+    U0_multiplier=1.0,           # initial random decision variable multiplier
+    abound=true,                 # whether to bound the control input
+    agoal=true,                  # whether to constrain the control input to go to goal
+    ψ̃goal=true,                  # whether to constrain the final state to be the goal state
 )
     # final time
     tf = dt * (N - 1)
@@ -51,7 +54,7 @@ function SingleQubitProblem(
     # set up quadratic objective function
     Q = Diagonal(@SVector fill(Qᵢᵢ, n))
     R = Diagonal(@SVector fill(Rᵢᵢ, m))
-    Qf = Diagonal(@SVector fill(Qfᵢᵢ, n))
+    Qf = state_cost_multiplier * Q
     obj = LQRObjective(Q, R, Qf, xf, N; checks=false);
 
     # penalize control at first and last time step more
@@ -63,20 +66,34 @@ function SingleQubitProblem(
     cons = ConstraintList(n, m, N)
 
     # constraint: bound control variable |aₖ| ≤ 0.5 GHz
-    aboundcon = NormConstraint(n, m, 0.5e9, Inequality(), [model.nstates + 2])
-    add_constraint!(cons, aboundcon, N)
+    if abound
+        aboundcon = NormConstraint(n, m, 0.5e9, Inequality(), [model.nstates + 2])
+        add_constraint!(cons, aboundcon, N)
+    end
 
     # constraint: set goal for ∫aₙ = aₙ = 0
-    # agoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+2)
-    # add_constraint!(cons, agoalcon, N)
+    if agoal
+        agoalcon = GoalConstraint(xf, model.nstates+1:model.nstates+2)
+        add_constraint!(cons, agoalcon, N)
+    end
 
     # constraint: set goal for |ψⁱₙ⟩ = |ψⁱfinal⟩
-    # ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
-    # add_constraint!(cons, ψ̃goalcon, N)
+    if ψ̃goal
+        ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
+        add_constraint!(cons, ψ̃goalcon, N)
+    end
 
     return Problem(dmodel, obj, x0, tf; xf=xf, constraints=cons, U0=U0)
 end
 
-
+function Dynamics.simulate(prob::Problem, U)
+    dmodel, _ = prob.model
+    x0 = prob.x0
+    N = prob.N
+    t = gettimes(prob)
+    dt = t[2] - t[1]
+    X = simulate(dmodel, x0, U, t, dt, N)
+    return X
+end
 
 end
