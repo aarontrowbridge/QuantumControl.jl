@@ -2,6 +2,12 @@ module QuantumControl
 
 using Reexport
 
+@reexport using RobotDynamics
+@reexport using TrajectoryOptimization
+@reexport using Altro
+@reexport using StaticArrays
+@reexport using LaTeXStrings
+
 include("dynamics.jl")
 @reexport using .Dynamics
 
