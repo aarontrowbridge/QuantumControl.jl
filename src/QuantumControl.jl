@@ -8,14 +8,17 @@ using Reexport
 @reexport using StaticArrays
 @reexport using LaTeXStrings
 
+include("quantumlogic.jl")
+@reexport using .QuantumLogic
+
 include("dynamics.jl")
 @reexport using .Dynamics
 
 include("problems.jl")
 @reexport using .Problems
 
-include("utils.jl")
-@reexport using .Utils
+include("qutiputils.jl")
+@reexport using .QuTiPUtils
 
 include("plottingutils.jl")
 @reexport using .PlottingUtils

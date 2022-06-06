@@ -3,6 +3,7 @@ module Problems
 export SingleQubitProblem
 
 using ..Dynamics
+using ..QuantumLogic
 
 using TrajectoryOptimization
 using Altro
@@ -13,6 +14,38 @@ using Random
 import RobotDynamics as RD
 
 function SingleQubitProblem(
+    H_drift,
+    H_drive,
+    gate::Symbol,
+    ψ0::Union{Vector{T}, Vector{Vector{T}}} where T<:Number;
+    kwargs...
+)
+    if typeof(ψ0) <: Vector{T} where T<:Number
+        @assert size(H_drift)[2] == size(ψ0)[1] "Hamiltonian dimension does not match ket dimension"
+        nqstates = 1
+        ψf = apply(gate, ψ0)
+        ψ̃f = ket_to_iso(ψf)
+    else
+        @assert size(H_drift)[2] == size(ψ0[1])[1] "Hamiltonian dimension does not match ket dimension"
+        nqstates = length(ψ0)
+        ψfs = apply.(gate, ψ0)
+        ψ̃fs = ket_to_iso.(ψfs)
+        ψ̃f = foldr(vcat, ψ̃fs)
+    end
+
+    ψ̃0 = ket_to_iso(ψ0)
+
+    SingleQubitProblem(
+        H_drift,
+        H_drive,
+        nqstates,
+        ψ̃0,
+        ψ̃f;
+        kwargs...
+    )
+end
+
+function SingleQubitProblem(
     H_drift,                     # drift Hamiltonian
     H_drive,                     # drive Hamiltonian
     nqstates,                    # number of quantum states
@@ -21,7 +54,7 @@ function SingleQubitProblem(
     c0=zeros(3),                 # initial control input (∫a, a, ȧ) .= 0
     cf=zeros(3),                 # final control input (∫a, a, ȧ) .= 0
     dt=0.01,                     # time step
-    N=101,                       # number of knot points
+    N=1001,                      # number of knot points
     Qᵢᵢ=1.0,                     # diagonal cost for state
     Rᵢᵢ=0.1,                     # diagonal cost for control
     state_cost_multiplier=100.0, # diagonal cost for final state
@@ -83,7 +116,15 @@ function SingleQubitProblem(
         add_constraint!(cons, ψ̃goalcon, N)
     end
 
-    return Problem(dmodel, obj, x0, tf; xf=xf, constraints=cons, U0=U0)
+    return Problem(
+        dmodel,
+        obj,
+        x0,
+        tf;
+        xf=xf,
+        constraints=cons,
+        U0=U0
+    )
 end
 
 function Dynamics.simulate(prob::Problem, U)

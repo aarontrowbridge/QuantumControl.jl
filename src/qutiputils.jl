@@ -1,5 +1,5 @@
 __precompile__()
-module Utils
+module QuTiPUtils
 
 export py_sparse_matrix_to_julia
 export load_qutip_object

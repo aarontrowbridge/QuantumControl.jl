@@ -12,70 +12,71 @@ H_drift = get_qutip_matrix(H_drift_path)
 H_drive = get_qutip_matrix(H_drive_path)
 
 N = 1001
-nqstates = 1
 
 # qubit basis states |0⟩ and |1⟩
-ψ̃0 = @SVector [1.0, 0.0, 0.0, 0.0] # initial quantum state isomorphism
-ψ̃1 = @SVector [0.0, 1.0, 0.0, 0.0] # final quantum state isomorphism
+ψ0 = [1, 0]
+ψ1 = [0, 1]
 
-# X gate on single basis state: |0⟩ -> X |0⟩ = |1⟩
-prob0 = SingleQubitProblem(
-    H_drift,
-    H_drive,
-    nqstates,
-    ψ̃0, # initial state
-    ψ̃1; # final state
-    N=N,
-)
+gates = [:X, :Y, :Z, :H]
 
-solver0 = ALTROSolver(prob0; verbose=2)
+for gate in gates
 
-# X gate on single basis state: |1⟩ -> X |1⟩ = |0⟩
-prob1 = SingleQubitProblem(
-    H_drift,
-    H_drive,
-    nqstates,
-    ψ̃1, # initial state
-    ψ̃0; # final state
-    N=N,
-)
+    println("\nbeginning ALTRO solves for $gate gate...")
 
-solver1 = ALTROSolver(prob1; verbose=2)
+    prob_gate_on_0 = SingleQubitProblem(
+        H_drift,
+        H_drive,
+        gate,
+        ψ0; # initial state
+        N=N,
+    )
 
-println("\nbeginning ALTRO solves...")
+    solver0 = ALTROSolver(prob_gate_on_0)
 
-println("\n|0⟩ -> X |0⟩")
-solve!(solver0)
+    prob_gate_on_1 = SingleQubitProblem(
+        H_drift,
+        H_drive,
+        gate,
+        ψ1; # initial state
+        N=N,
+    )
 
-println("\n|1⟩ -> X |1⟩")
-solve!(solver1)
+    solver1 = ALTROSolver(prob_gate_on_1)
 
-println("\nplotting results...")
 
-# plot X gate on |0⟩ results
+    println("\n|0⟩ -> $gate |0⟩")
+    solve!(solver0)
 
-plot_wfn_ctrl_derivs(
-    solver0,
-    "plots/single_fluxonium_qubit/single_qstate_X_gate_on_0_basis_all.png",
-    fig_title="X gate on 0 basis state",
-)
+    println("\n|1⟩ -> $gate |1⟩")
+    solve!(solver1)
 
-plot_wfn(
-    solver0,
-    "plots/single_fluxonium_qubit/single_qstate_X_gate_on_0_basis_wfn.png",
-    title="X gate on 0 basis state",
-)
+    println("\nplotting results...")
 
-# plot X gate on |1⟩ results
+    # plot X gate on |0⟩ results
 
-plot_wfn_ctrl_derivs(
-    solver1,
-    "plots/single_fluxonium_qubit/single_qstate_X_gate_on_1_basis_all.png",
-    fig_title="X gate on 1 basis state",
-)
+    plot_wfn_ctrl_derivs(
+        solver0,
+        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_0_basis_all.png",
+        fig_title="$gate gate on 0 basis state",
+    )
 
-plot_wfn(
-    solver1,
-    "plots/single_fluxonium_qubit/single_qstate_X_gate_on_1_basis_wfn.png",
-    title="X gate on 1 basis state",
-)
+    plot_wfn(
+        solver0,
+        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_0_basis_wfn.png",
+        title="$gate gate on 0 basis state",
+    )
+
+    # plot X gate on |1⟩ results
+
+    plot_wfn_ctrl_derivs(
+        solver1,
+        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_1_basis_all.png",
+        fig_title="$gate gate on 1 basis state",
+    )
+
+    plot_wfn(
+        solver1,
+        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_1_basis_wfn.png",
+        title="$gate gate on 1 basis state",
+    )
+end
