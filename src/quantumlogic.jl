@@ -2,6 +2,7 @@ module QuantumLogic
 
 export apply
 export ket_to_iso
+export iso_to_ket
 
 using StaticArrays
 

@@ -1,22 +1,28 @@
 module Dynamics
 
 export MultiQubitSystem
+export MultiQubitSystemCost
 export state_dim
 export control_dim
 export simulate
 
-using LinearAlgebra
-using StaticArrays
+using ..QuantumLogic
+
+using TrajectoryOptimization
+using RobotDynamics
 using ForwardDiff
 using FiniteDiff
+using LinearAlgebra
+using StaticArrays
 
-import RobotDynamics as RD
+const TO = TrajectoryOptimization
+const RD = RobotDynamics
 
 RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
     nqubits::Int
-    nstates::Int
-    nqstates::Int
     isodim::Int
+    nqstates::Int
+    nstates::Int
     H_drift::SMatrix{n} where n
     H_drive::SMatrix{m} where m
 
@@ -29,7 +35,7 @@ RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
         isodim = 2 * 2^nqubits # (C²)^(⊗n) ≅ C^(2ⁿ) ≅ R^(2⋅2ⁿ)
         nstates = nqstates * isodim
         return new{typeof(H_drift)}(
-            nqubits, nstates, nqstates, isodim, H_drift, H_drive
+            nqubits, isodim, nqstates, nstates, H_drift, H_drive
         )
     end
 end
@@ -37,7 +43,33 @@ end
 RD.state_dim(model::MultiQubitSystem) = model.nstates + 3
 RD.control_dim(::MultiQubitSystem) = 1
 
-# for some reason, in-place dynamics is not working
+RD.@autodiff struct MultiQubitSystemCost <: TO.CostFunction
+    Q::SVector{N} where N
+    R::SVector{M} where M
+    ψ̃f::SVector{L} where L
+    nqstates::Int
+    isodim::Int
+end
+
+RD.state_dim(cost::MultiQubitSystemCost) = cost.isodim * cost.nqstates + 3
+RD.control_dim(::MultiQubitSystemCost) = 1
+
+function RD.evaluate(cost::MultiQubitSystemCost, x, u)
+    ψ̃s = [x[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
+    ψs = iso_to_ket.(ψ̃s)
+    ψ̃fs = [cost.ψ̃f[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
+    ψfs = iso_to_ket.(ψ̃fs)
+    J = 0.0
+    for (i, (ψ, ψf)) in enumerate(zip(ψs, ψfs))
+        J += cost.Q[i] * sqrt(1 - abs2(ψ'ψf))
+    end
+    J += cost.Q[end-3:end]'x[end-3:end]
+    if !isempty(u)
+        J += 0.5 * cost.R[1] * u[1]^2
+    end
+    return J
+end
+
 function RD.dynamics!(model::MultiQubitSystem, ẋ, x, u)
     ctrl_inds = (model.nstates + 1):(model.nstates + 3)
     ∫a, a, da = x[ctrl_inds]

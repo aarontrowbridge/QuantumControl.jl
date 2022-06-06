@@ -6,12 +6,14 @@ using ..Dynamics
 using ..QuantumLogic
 
 using TrajectoryOptimization
+using RobotDynamics
 using Altro
 using LinearAlgebra
 using StaticArrays
 using Random
 
-import RobotDynamics as RD
+const RD = RobotDynamics
+const TO = TrajectoryOptimization
 
 function SingleQubitProblem(
     H_drift,
@@ -55,6 +57,7 @@ function SingleQubitProblem(
     cf=zeros(3),                 # final control input (∫a, a, ȧ) .= 0
     dt=0.01,                     # time step
     N=1001,                      # number of knot points
+    fidelity_cost=true,          # whether to use fidelity cost
     Qᵢᵢ=1.0,                     # diagonal cost for state
     Rᵢᵢ=0.1,                     # diagonal cost for control
     state_cost_multiplier=100.0, # diagonal cost for final state
@@ -84,16 +87,28 @@ function SingleQubitProblem(
         U0 = [U0_multiplier * @SVector randn(m) for _ = 1:N-1]
     end
 
-    # set up quadratic objective function
-    Q = Diagonal(@SVector fill(Qᵢᵢ, n))
-    R = Diagonal(@SVector fill(Rᵢᵢ, m))
-    Qf = state_cost_multiplier * Q
-    obj = LQRObjective(Q, R, Qf, xf, N; checks=false);
+    if fidelity_cost
+        Q = @SVector fill(Qᵢᵢ, nqstates + 3)
+        R = @SVector fill(Rᵢᵢ, 1)
+        cost = MultiQubitSystemCost(Q, R, ψ̃f, nqstates, model.isodim)
+        Qf = state_cost_multiplier * Q
+        Rf = ctrl_cost_multiplier * R
+        Ri = Rf
+        cost_term = MultiQubitSystemCost(Qf, Rf, ψ̃f, nqstates, model.isodim)
+        obj = Objective(cost, cost_term, N)
+        obj.cost[1] = MultiQubitSystemCost(Q, Ri, ψ̃0, nqstates, model.isodim)
+    else
+        # set up quadratic objective function
+        Q = Diagonal(@SVector fill(Qᵢᵢ, n))
+        R = Diagonal(@SVector fill(Rᵢᵢ, m))
+        Qf = state_cost_multiplier * Q
+        obj = LQRObjective(Q, R, Qf, xf, N; checks=false);
 
-    # penalize control at first and last time step more
-    costfun = LQRCost(Q, ctrl_cost_multiplier * R, xf)
-    obj.cost[1] = costfun
-    obj.cost[N-1] = costfun
+        # penalize control at first and last time step more
+        costfun = LQRCost(Q, ctrl_cost_multiplier * R, xf)
+        obj.cost[1] = costfun
+        obj.cost[N-1] = costfun
+    end
 
     # set up contraints
     cons = ConstraintList(n, m, N)

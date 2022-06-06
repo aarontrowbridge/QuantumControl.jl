@@ -1,5 +1,8 @@
 using QuantumControl
 
+# plotting directory
+plot_dir = "plots/single_fluxonium_qubit/"
+
 println("\npackages are loaded!")
 
 # getting Hamiltonians from saved qutip objects
@@ -11,12 +14,11 @@ H_drive_path = qutip_obj_dir * "H_drive.qu"
 H_drift = get_qutip_matrix(H_drift_path)
 H_drive = get_qutip_matrix(H_drive_path)
 
-N = 1001
-
 # qubit basis states |0⟩ and |1⟩
 ψ0 = [1, 0]
 ψ1 = [0, 1]
 
+# loop over all single qubit gates
 gates = [:X, :Y, :Z, :H]
 
 for gate in gates
@@ -28,7 +30,6 @@ for gate in gates
         H_drive,
         gate,
         ψ0; # initial state
-        N=N,
     )
 
     solver0 = ALTROSolver(prob_gate_on_0)
@@ -38,7 +39,6 @@ for gate in gates
         H_drive,
         gate,
         ψ1; # initial state
-        N=N,
     )
 
     solver1 = ALTROSolver(prob_gate_on_1)
@@ -56,13 +56,13 @@ for gate in gates
 
     plot_wfn_ctrl_derivs(
         solver0,
-        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_0_basis_all.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_0_basis_all.png",
         fig_title="$gate gate on 0 basis state",
     )
 
     plot_wfn(
         solver0,
-        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_0_basis_wfn.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_0_basis_wfn.png",
         title="$gate gate on 0 basis state",
     )
 
@@ -70,13 +70,13 @@ for gate in gates
 
     plot_wfn_ctrl_derivs(
         solver1,
-        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_1_basis_all.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_1_basis_all.png",
         fig_title="$gate gate on 1 basis state",
     )
 
     plot_wfn(
         solver1,
-        "plots/single_fluxonium_qubit/single_qstate_$(gate)_gate_on_1_basis_wfn.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_1_basis_wfn.png",
         title="$gate gate on 1 basis state",
     )
 end
