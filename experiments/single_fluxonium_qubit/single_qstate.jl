@@ -1,5 +1,7 @@
 using QuantumControl
 
+import Base.Threads: @threads
+
 # plotting directory
 plot_dir = "plots/single_fluxonium_qubit/"
 
@@ -18,10 +20,24 @@ H_drive = get_qutip_matrix(H_drive_path)
 ψ0 = [1, 0]
 ψ1 = [0, 1]
 
+# number of time steps
+T = 10.01
+N = 1001
+dt = T / N
+
+plot_wfn = false
+
+fidelity_cost = true
+
 # loop over all single qubit gates
 gates = [:X, :Y, :Z, :H]
+# gates = [:X]
 
-for gate in gates
+solver0s = Vector{Altro.AbstractSolver}(undef, length(gates))
+solver1s = Vector{Altro.AbstractSolver}(undef, length(gates))
+
+@threads for i = 1:length(gates)
+    gate = gates[i]
 
     println("\nbeginning ALTRO solves for $gate gate...")
 
@@ -30,6 +46,9 @@ for gate in gates
         H_drive,
         gate,
         ψ0; # initial state
+        dt=dt,
+        N=N,
+        fidelity_cost=fidelity_cost,
     )
 
     solver0 = ALTROSolver(prob_gate_on_0)
@@ -39,6 +58,9 @@ for gate in gates
         H_drive,
         gate,
         ψ1; # initial state
+        dt=dt,
+        N=N,
+        fidelity_cost=fidelity_cost,
     )
 
     solver1 = ALTROSolver(prob_gate_on_1)
@@ -46,37 +68,45 @@ for gate in gates
 
     println("\n|0⟩ -> $gate |0⟩")
     solve!(solver0)
+    solver0s[i] = solver0
 
     println("\n|1⟩ -> $gate |1⟩")
     solve!(solver1)
+    solver1s[i] = solver1
+end
 
-    println("\nplotting results...")
+println("\nplotting results...")
 
-    # plot X gate on |0⟩ results
+for (gate, solver0, solver1) in zip(gates, solver0s, solver1s)
+
+
+    # plot gate on |0⟩ results
 
     plot_wfn_ctrl_derivs(
         solver0,
-        plot_dir*"single_qstate_$(gate)_gate_on_0_basis_all.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_0_basis_all_T_$(T)_$(fidelity_cost ? "fidelity" : "LQR").png",
         fig_title="$gate gate on 0 basis state",
     )
 
-    plot_wfn(
-        solver0,
-        plot_dir*"single_qstate_$(gate)_gate_on_0_basis_wfn.png",
-        title="$gate gate on 0 basis state",
-    )
-
-    # plot X gate on |1⟩ results
+    # plot gate on |1⟩ results
 
     plot_wfn_ctrl_derivs(
         solver1,
-        plot_dir*"single_qstate_$(gate)_gate_on_1_basis_all.png",
+        plot_dir*"single_qstate_$(gate)_gate_on_1_basis_all_T_$(T)_$(fidelity_cost ? "fidelity" : "LQR").png",
         fig_title="$gate gate on 1 basis state",
     )
 
-    plot_wfn(
-        solver1,
-        plot_dir*"single_qstate_$(gate)_gate_on_1_basis_wfn.png",
-        title="$gate gate on 1 basis state",
-    )
+    if plot_wfn
+        plot_wfn(
+            solver0,
+            plot_dir*"single_qstate_$(gate)_gate_on_0_basis_wfn_T_$(T)_$(fidelity_cost ? "fidelity" : "LQR").png",
+            title="$gate gate on 0 basis state",
+        )
+
+        plot_wfn(
+            solver1,
+            plot_dir*"single_qstate_$(gate)_gate_on_1_basis_wfn_T_$(T)_$(fidelity_cost ? "fidelity" : "LQR").png",
+            title="$gate gate on 1 basis state",
+        )
+    end
 end
