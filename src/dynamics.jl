@@ -43,33 +43,6 @@ end
 RD.state_dim(model::MultiQubitSystem) = model.nstates + 3
 RD.control_dim(::MultiQubitSystem) = 1
 
-RD.@autodiff struct MultiQubitSystemCost <: TO.CostFunction
-    Q::SVector{N} where N
-    R::SVector{M} where M
-    ψ̃f::SVector{L} where L
-    nqstates::Int
-    isodim::Int
-end
-
-RD.state_dim(cost::MultiQubitSystemCost) = cost.isodim * cost.nqstates + 3
-RD.control_dim(::MultiQubitSystemCost) = 1
-
-function RD.evaluate(cost::MultiQubitSystemCost, x, u)
-    ψ̃s = [x[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
-    ψs = iso_to_ket.(ψ̃s)
-    ψ̃fs = [cost.ψ̃f[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
-    ψfs = iso_to_ket.(ψ̃fs)
-    J = 0.0
-    for (i, (ψ, ψf)) in enumerate(zip(ψs, ψfs))
-        J += cost.Q[i] * sqrt(1 - abs2(ψ'ψf))
-    end
-    J += cost.Q[end-3:end]'x[end-3:end]
-    if !isempty(u)
-        J += 0.5 * cost.R[1] * u[1]^2
-    end
-    return J
-end
-
 function RD.dynamics!(model::MultiQubitSystem, ẋ, x, u)
     ctrl_inds = (model.nstates + 1):(model.nstates + 3)
     ∫a, a, da = x[ctrl_inds]
@@ -112,6 +85,52 @@ function simulate(dmodel, x0, U, t, dt, N)
         push!(X, RD.discrete_dynamics(dmodel, X[i-1], U[i-1], t[i-1], dt))
     end
     return X
+end
+
+struct MultiQubitSystemCost <: TO.CostFunction
+    Q::SVector{N} where N
+    R::SVector{M} where M
+    ψ̃f::SVector{L} where L
+    nqstates::Int
+    isodim::Int
+end
+
+(cost::MultiQubitSystemCost)(x, u) = RD.evaluate(cost, x, u)
+(cost::MultiQubitSystemCost)(xu) = cost(xu[1:end-1], xu[end:end])
+
+RD.state_dim(cost::MultiQubitSystemCost) = cost.isodim * cost.nqstates + 3
+RD.control_dim(::MultiQubitSystemCost) = 1
+
+function RD.evaluate(cost::MultiQubitSystemCost, x, u)
+    ψ̃s = [x[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
+    ψs = iso_to_ket.(ψ̃s)
+    ψ̃fs = [cost.ψ̃f[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
+    ψfs = iso_to_ket.(ψ̃fs)
+    J = 0.0
+    for (i, (ψ, ψf)) in enumerate(zip(ψs, ψfs))
+        J += cost.Q[i] * (1 - abs2(ψ'ψf))^2
+    end
+    J += dot(cost.Q[end-2:end], x[end-2:end].^2)
+    if !isempty(u)
+        J += cost.R[1] * u[1]^2
+    end
+    return J
+end
+
+function RD.gradient!(cost::MultiQubitSystemCost, grad, x, u)
+    if !isempty(u)
+        ForwardDiff.gradient!(grad, cost, [x; u])
+    else
+        ForwardDiff.gradient!(grad, cost, [x; 0.0])
+    end
+end
+
+function RD.hessian!(cost::MultiQubitSystemCost, hess, x, u)
+    if !isempty(u)
+        ForwardDiff.hessian!(hess, cost, [x; u])
+    else
+        ForwardDiff.hessian!(hess, cost, [x; 0.0])
+    end
 end
 
 end

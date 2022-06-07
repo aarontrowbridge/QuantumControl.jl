@@ -27,15 +27,16 @@ function SingleQubitProblem(
         nqstates = 1
         ψf = apply(gate, ψ0)
         ψ̃f = ket_to_iso(ψf)
+        ψ̃0 = ket_to_iso(ψ0)
     else
         @assert size(H_drift)[2] == size(ψ0[1])[1] "Hamiltonian dimension does not match ket dimension"
         nqstates = length(ψ0)
         ψfs = apply.(gate, ψ0)
         ψ̃fs = ket_to_iso.(ψfs)
         ψ̃f = foldr(vcat, ψ̃fs)
+        ψ̃0s = ket_to_iso.(ψ0)
+        ψ̃0 = foldr(vcat, ψ̃0s)
     end
-
-    ψ̃0 = ket_to_iso(ψ0)
 
     SingleQubitProblem(
         H_drift,
@@ -60,8 +61,10 @@ function SingleQubitProblem(
     fidelity_cost=true,          # whether to use fidelity cost
     Qᵢᵢ=1.0,                     # diagonal cost for state
     Rᵢᵢ=0.1,                     # diagonal cost for control
-    state_cost_multiplier=100.0, # diagonal cost for final state
-    ctrl_cost_multiplier=100.0,  # cost multiplier for control
+    ctrl_cost=0.5,               # control cost
+    state_cost_multiplier=500.0, # diagonal cost for final state
+    ctrl_cost_multiplier=100.0,  # cost multiplier for state control variables
+    dec_cost_multiplier=100.0,   # cost multiplier for decision variable
     U0=nothing,                  # initial control input
     U0_multiplier=1.0,           # initial random decision variable multiplier
     abound=true,                 # whether to bound the control input
@@ -88,11 +91,11 @@ function SingleQubitProblem(
     end
 
     if fidelity_cost
-        Q = @SVector fill(Qᵢᵢ, nqstates + 3)
+        Q = [@SVector fill(Qᵢᵢ / nqstates, nqstates); @SVector fill(ctrl_cost, 3)]
         R = @SVector fill(Rᵢᵢ, 1)
         cost = MultiQubitSystemCost(Q, R, ψ̃f, nqstates, model.isodim)
-        Qf = state_cost_multiplier * Q
-        Rf = ctrl_cost_multiplier * R
+        Qf = SVector{nqstates+3}([state_cost_multiplier * Q[1:end-3]; ctrl_cost_multiplier * Q[end-2:end]])
+        Rf = dec_cost_multiplier * R
         Ri = Rf
         cost_term = MultiQubitSystemCost(Qf, Rf, ψ̃f, nqstates, model.isodim)
         obj = Objective(cost, cost_term, N)
