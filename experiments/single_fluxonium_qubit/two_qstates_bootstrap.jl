@@ -13,45 +13,40 @@ H_drive_path = qutip_obj_dir * "H_drive.qu"
 H_drift = get_qutip_matrix(H_drift_path)
 H_drive = get_qutip_matrix(H_drive_path)
 
-println("\nsetting up single qstate probs...")
+println("\nsetting up single qstate prob...")
 
 # qubit basis states |0⟩ and |1⟩
-ψ̃0 = @SVector [1.0, 0.0, 0.0, 0.0] # initial quantum state isomorphism
-ψ̃1 = @SVector [0.0, 1.0, 0.0, 0.0] # final quantum state isomorphism
+ψ0 = [1, 0]
+ψ1 = [0, 1]
 
-bootstrap_init_basis = parse(Int, ARGS[1])
+bootstrap_init_basis = ARGS[1]
+
+gate = Symbol(ARGS[2])
 
 bootstrap_nqstates = 1
 
+T = 10.01
 N = 1001
-dt = 0.01
+dt = T / N
 
-initprob0 = SingleQubitProblem(
-    H_drift,
-    H_drive,
-    bootstrap_nqstates,
-    ψ̃0,
-    ψ̃1;
-    N=N,
-    dt=dt
-    # U0_multiplier=0.1,
-)
-
-initprob1 = SingleQubitProblem(
-    H_drift,
-    H_drive,
-    bootstrap_nqstates,
-    ψ̃1,
-    ψ̃0;
-    N=N,
-    dt=dt
-    # U0_multiplier=0.1,
-)
-
-if bootstrap_init_basis == 0
-    initprob = initprob0
-elseif bootstrap_init_basis == 1
-    initprob = initprob1
+if bootstrap_init_basis == "0"
+    initprob = SingleQubitProblem(
+        H_drift,
+        H_drive,
+        gate,
+        ψ0;
+        N=N,
+        dt=dt
+    )
+elseif bootstrap_init_basis == "1"
+    initprob = SingleQubitProblem(
+        H_drift,
+        H_drive,
+        gate,
+        ψ1;
+        N=N,
+        dt=dt
+    )
 else
     error("bootstrap_init_basis must be 0 or 1")
 end
@@ -64,24 +59,24 @@ solve!(initsolver)
 
 plot_wfn_ctrl_derivs(
     initsolver,
-    plot_dir*"two_qstates_bootstrap_from_$(bootstrap_init_basis)_basis__X_gate_init_all.png",
-    fig_title="X gate on 0 basis state"
+    plot_dir*"two_qstates_bootstrap_$(gate)_gate_from_$(bootstrap_init_basis)_basis_init_all.png",
+    fig_title="$gate gate on $bootstrap_init_basis basis state"
 )
 
 U0 = controls(initsolver)
 
 # X gate on two basis states |0⟩ and |1⟩
 nqstates = 2
-ψ̃i = [ψ̃0; ψ̃1]
-ψ̃f = [ψ̃1; ψ̃0]
+
+ψ0s = [ψ0, ψ1]
 
 twoqstateprob = SingleQubitProblem(
     H_drift,
     H_drive,
-    nqstates,
-    ψ̃i,
-    ψ̃f;
+    gate,
+    ψ0s;
     N=N,
+    dt=dt,
     U0=U0,
     ψ̃goal=false
 )
@@ -94,10 +89,10 @@ t = range(0, N*dt, N)
 plot_two_wfns(
     X,
     t,
-    plot_dir*"two_qstates_bootstrap_from_$(bootstrap_init_basis)_basis__X_gate_sim_wfns.png";
+    plot_dir*"two_qstates_bootstrap_$(gate)_gate_from_$(bootstrap_init_basis)_basis_sim_wfns.png";
     show_dec_var=true,
     U=U0,
-    fig_title="X gate on basis states simulated from 1st solve"
+    fig_title="$gate gate on basis states simulated from $bootstrap_init_basis basis solve"
 )
 
 println("\nsolving bootstrapped two qstate prob...")
@@ -110,7 +105,7 @@ println("\nplotting results...")
 
 plot_two_wfns(
     solver,
-    plot_dir*"two_qstates_bootstrap_from_$(bootstrap_init_basis)_basis__X_gate_result_all.png";
+    plot_dir*"two_qstates_bootstrap_$(gate)_gate_from_$(bootstrap_init_basis)_basis_result_all.png";
     show_dec_var=true,
-    fig_title="X gate on basis states",
+    fig_title="bootstrapped $gate gate on basis states from $bootstrap_init_basis basis solve",
 )

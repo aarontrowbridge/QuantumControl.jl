@@ -27,6 +27,8 @@ dt = T / N
 
 plot_wfn = false
 
+äbound = true
+
 fidelity_cost = true
 
 # loop over all single qubit gates
@@ -49,6 +51,7 @@ solver1s = Vector{Altro.AbstractSolver}(undef, length(gates))
         dt=dt,
         N=N,
         fidelity_cost=fidelity_cost,
+        äbound=äbound,
     )
 
     solver0 = ALTROSolver(prob_gate_on_0)
@@ -61,6 +64,7 @@ solver1s = Vector{Altro.AbstractSolver}(undef, length(gates))
         dt=dt,
         N=N,
         fidelity_cost=fidelity_cost,
+        äbound=äbound,
     )
 
     solver1 = ALTROSolver(prob_gate_on_1)
@@ -78,7 +82,6 @@ end
 println("\nplotting results...")
 
 for (gate, solver0, solver1) in zip(gates, solver0s, solver1s)
-
 
     # plot gate on |0⟩ results
 

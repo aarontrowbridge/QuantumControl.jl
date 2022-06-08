@@ -25,7 +25,7 @@ const GATES = Dict(
             0 0 1 0],
 )
 
-function apply(gate, ψ)
+function apply(gate::Symbol, ψ)
     @assert gate in keys(GATES) "gate not found"
     U = GATES[gate]
     @assert size(U)[2] == size(ψ)[1] "gate size does not match ket dim"

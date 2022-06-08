@@ -62,12 +62,14 @@ function SingleQubitProblem(
     Qᵢᵢ=1.0,                     # diagonal cost for state
     Rᵢᵢ=0.1,                     # diagonal cost for control
     ctrl_cost=0.5,               # control cost
-    state_cost_multiplier=500.0, # diagonal cost for final state
+    state_cost_multiplier=1000.0, # diagonal cost for final state
     ctrl_cost_multiplier=100.0,  # cost multiplier for state control variables
     dec_cost_multiplier=100.0,   # cost multiplier for decision variable
     U0=nothing,                  # initial control input
     U0_multiplier=1.0,           # initial random decision variable multiplier
     abound=true,                 # whether to bound the control input
+    äbound=true,                 # whether to bound the decision variable
+    äbound_val=2.0,              # bound value for decision variable
     agoal=true,                  # whether to constrain the control input to go to goal
     ψ̃goal=true,                  # whether to constrain the final state to be the goal state
 )
@@ -91,10 +93,10 @@ function SingleQubitProblem(
     end
 
     if fidelity_cost
-        Q = [@SVector fill(Qᵢᵢ / nqstates, nqstates); @SVector fill(ctrl_cost, 3)]
+        Q = [@SVector fill(Qᵢᵢ / nqstates^2, nqstates); @SVector fill(ctrl_cost, 3)]
         R = @SVector fill(Rᵢᵢ, 1)
         cost = MultiQubitSystemCost(Q, R, ψ̃f, nqstates, model.isodim)
-        Qf = SVector{nqstates+3}([state_cost_multiplier * Q[1:end-3]; ctrl_cost_multiplier * Q[end-2:end]])
+        Qf = SVector{nqstates+3}([state_cost_multiplier^nqstates * Q[1:end-3]; ctrl_cost_multiplier * Q[end-2:end]])
         Rf = dec_cost_multiplier * R
         Ri = Rf
         cost_term = MultiQubitSystemCost(Qf, Rf, ψ̃f, nqstates, model.isodim)
@@ -116,11 +118,42 @@ function SingleQubitProblem(
     # set up contraints
     cons = ConstraintList(n, m, N)
 
-    # constraint: bound control variable |aₖ| ≤ 0.5 GHz
-    if abound
-        aboundcon = NormConstraint(n, m, 0.5e9, Inequality(), [model.nstates + 2])
-        add_constraint!(cons, aboundcon, N)
-    end
+    # constraint: bound decision variable |ä| ≤ äbound_val
+
+    ψ̃_max = ones(n-3)
+    ψ̃_min = -ψ̃_max
+
+    ∫a_max = Inf
+    ∫a_min = -∫a_max
+
+    a_max = 0.5
+    a_min = -a_max
+
+    ȧ_max = Inf
+    ȧ_min = -ȧ_max
+
+    ä_max = äbound ? äbound_val : Inf
+    ä_min = -ä_max
+
+    x_max = [ψ̃_max; ∫a_max; a_max; ȧ_max]
+    x_min = [ψ̃_min; ∫a_min; a_min; ȧ_min]
+
+    u_max = [ä_max]
+    u_min = [ä_min]
+
+    boundcon = BoundConstraint(n, m; x_min, x_max, u_min, u_max)
+    add_constraint!(cons, boundcon, N)
+
+    # if äbound
+    #     äboundcon = NormConstraint(n, m, äbound_val, Altro.SecondOrderCone(), :control)
+    #     add_constraint!(cons, äboundcon, N)
+    # end
+
+    # # constraint: bound control variable |aₖ| ≤ 0.5 GHz
+    # if abound
+    #     aboundcon = NormConstraint(n, m, 0.5, Altro.SecondOrderCone(), [model.nstates + 2])
+    #     add_constraint!(cons, aboundcon, N)
+    # end
 
     # constraint: set goal for ∫aₙ = aₙ = 0
     if agoal
@@ -129,10 +162,10 @@ function SingleQubitProblem(
     end
 
     # constraint: set goal for |ψⁱₙ⟩ = |ψⁱfinal⟩
-    if ψ̃goal
-        ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
-        add_constraint!(cons, ψ̃goalcon, N)
-    end
+    # if ψ̃goal
+    #     ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
+    #     add_constraint!(cons, ψ̃goalcon, N)
+    # end
 
     return Problem(
         dmodel,

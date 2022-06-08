@@ -1,5 +1,7 @@
 using QuantumControl
 
+import Base.Threads: @threads
+
 println("\nloading saved Hamilitonian...")
 
 qutip_obj_dir = "qutip_saved_objects/single_fluxonium_qubit/"
@@ -10,40 +12,61 @@ H_drive_path = qutip_obj_dir * "H_drive.qu"
 H_drift = get_qutip_matrix(H_drift_path)
 H_drive = get_qutip_matrix(H_drive_path)
 
-# qubit basis states |0⟩ and |1⟩
-ψ̃0 = @SVector [1.0, 0.0, 0.0, 0.0] # initial quantum state isomorphism
-ψ̃1 = @SVector [0.0, 1.0, 0.0, 0.0] # final quantum state isomorphism
-
+T = 10.01
 N = 1001
-dt = 0.01
+dt = T / N
+
+gate = :X
 
 # X gate on two basis states |0⟩ and |1⟩
-nqstates = 2
-ψ̃i = [ψ̃0; ψ̃1]
-ψ̃f = [ψ̃1; ψ̃0]
+# nqstates = 2
+# ψ̃i = [ψ̃0; ψ̃1]
+# ψ̃f = [ψ̃1; ψ̃0]
 
-twoqstateprob = SingleQubitProblem(
-    H_drift,
-    H_drive,
-    nqstates,
-    ψ̃i,
-    ψ̃f;
-    dt=dt,
-    N=N,
-    ψ̃goal=false
-)
+ψi = [[1, 0], [0, 1]]
 
-println("\nsolving two qstate prob...")
+gates = [:X, :Y, :Z, :H]
 
-solver = ALTROSolver(twoqstateprob; verbose=2)
+solvers = Vector{Altro.AbstractSolver}(undef, length(gates))
 
-solve!(solver)
+@threads for i = 1:length(gates)
+    gate = gates[i]
+
+    twoqstateprob = SingleQubitProblem(
+        H_drift,
+        H_drive,
+        gate,
+        ψi;
+        dt=dt,
+        N=N,
+        # Qᵢᵢ=0.1,
+        # ctrl_cost=0.1,
+        # ctrl_cost_multiplier=100.0,
+        # state_cost_multiplier=1000.0,
+        # dec_cost_multiplier=10.0,
+
+    )
+
+    println("\nsolving two qstate $gate gate prob...")
+
+    solver = ALTROSolver(
+        twoqstateprob;
+        max_cost_value=1e10,
+        iterations=2000,
+        iterations_outer=100
+    )
+
+    solve!(solver)
+    solvers[i] = solver
+end
 
 println("\nplotting results...")
 
-plot_two_wfns(
-    solver,
-    "plots/single_fluxonium_qubit/two_qstates_raw_X_gate_everything.png";
-    show_dec_var=true,
-    fig_title="X gate on basis states",
-)
+for (gate, solver) in zip(gates, solvers)
+    plot_two_wfns(
+        solver,
+        "plots/single_fluxonium_qubit/two_qstates_raw_$(gate)_gate_wfns_dec.png";
+        show_dec_var=true,
+        fig_title="$gate gate on basis states",
+    )
+end
