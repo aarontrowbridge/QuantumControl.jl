@@ -19,11 +19,17 @@ dt = T / N
 gate = :X
 
 # X gate on two basis states |0⟩ and |1⟩
-# nqstates = 2
-# ψ̃i = [ψ̃0; ψ̃1]
-# ψ̃f = [ψ̃1; ψ̃0]
 
-ψi = [[1, 0], [0, 1]]
+ψ0 = [1, 0]
+ψ1 = [0, 1]
+
+ψi_operator = [ψ0, ψ1, (ψ0 + im*ψ1)/√2, (ψ0 - ψ1)/√2]
+
+ψi_standard = [ψ0, ψ1]
+
+ψi = ψi_standard
+
+iterations = 5000
 
 gates = [:X, :Y, :Z, :H]
 
@@ -44,6 +50,7 @@ solvers = Vector{Altro.AbstractSolver}(undef, length(gates))
         # ctrl_cost_multiplier=100.0,
         # state_cost_multiplier=1000.0,
         # dec_cost_multiplier=10.0,
+        # ψ̃goal=false
 
     )
 
@@ -52,7 +59,7 @@ solvers = Vector{Altro.AbstractSolver}(undef, length(gates))
     solver = ALTROSolver(
         twoqstateprob;
         max_cost_value=1e10,
-        iterations=2000,
+        iterations=iterations,
         iterations_outer=100
     )
 

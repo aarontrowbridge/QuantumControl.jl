@@ -68,7 +68,7 @@ U0 = controls(initsolver)
 # X gate on two basis states |0⟩ and |1⟩
 nqstates = 2
 
-ψ0s = [ψ0, ψ1]
+ψ0s = [ψ0, ψ1, (ψ0 + im*ψ1)/√2, (ψ0 - ψ1)/√2]
 
 twoqstateprob = SingleQubitProblem(
     H_drift,

@@ -2,9 +2,14 @@ module Dynamics
 
 export MultiQubitSystem
 export MultiQubitSystemCost
+export QuantumGoalConstraint
 export state_dim
 export control_dim
 export simulate
+export ⊗
+export Id2
+export im2
+export qubit_cost
 
 using ..QuantumLogic
 
@@ -17,6 +22,10 @@ using StaticArrays
 
 const TO = TrajectoryOptimization
 const RD = RobotDynamics
+
+#
+# multi qubit system model
+#
 
 RD.@autodiff struct MultiQubitSystem <: RD.ContinuousDynamics
     nqubits::Int
@@ -87,50 +96,109 @@ function simulate(dmodel, x0, U, t, dt, N)
     return X
 end
 
+#
+# quantum cost function
+#
+
 struct MultiQubitSystemCost <: TO.CostFunction
     Q::SVector{N} where N
     R::SVector{M} where M
-    ψ̃f::SVector{L} where L
+    ψfs::Vector{SVector{D, T}} where {D,T}
     nqstates::Int
     isodim::Int
+    function MultiQubitSystemCost(
+        ψf;
+        Q=[ones(isa(ψf, Vector{V} where V<:AbstractArray) ? length(ψf) : 1); ones(3)],
+        R=[0.1],
+    )
+        if isa(ψf, Vector{A} where A<:AbstractArray)
+            nqstates = length(ψf)
+            isodim = 2 * length(ψf[1])
+            ψfs = [ket(ψ) for ψ in ψf]
+        else
+            nqstates = 1
+            isodim = 2 * length(ψf)
+            ψfs = [ket(ψf)]
+        end
+        return new(Q, R, ψfs, nqstates, isodim)
+    end
 end
-
-(cost::MultiQubitSystemCost)(x, u) = RD.evaluate(cost, x, u)
-(cost::MultiQubitSystemCost)(xu) = cost(xu[1:end-1], xu[end:end])
 
 RD.state_dim(cost::MultiQubitSystemCost) = cost.isodim * cost.nqstates + 3
 RD.control_dim(::MultiQubitSystemCost) = 1
 
+(cost::MultiQubitSystemCost)(xu) = RD.evaluate(cost, xu[1:end-1], xu[end:end])
+
 function RD.evaluate(cost::MultiQubitSystemCost, x, u)
     ψ̃s = [x[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
     ψs = iso_to_ket.(ψ̃s)
-    ψ̃fs = [cost.ψ̃f[(1 + (i-1)*cost.isodim):i*cost.isodim] for i in 1:cost.nqstates]
-    ψfs = iso_to_ket.(ψ̃fs)
     J = 0.0
-    for (i, (ψ, ψf)) in enumerate(zip(ψs, ψfs))
-        J += cost.Q[i] * (1 - abs2(ψ'ψf))^2
+    for (i, (ψ, ψf)) in enumerate(zip(ψs, cost.ψfs))
+        J += cost.Q[i] * qubit_cost(ψ, ψf)
+        # @info qubit_cost(ψ, ψf)
     end
     J += dot(cost.Q[end-2:end], x[end-2:end].^2)
+    # @info dot(cost.Q[end-2:end], x[end-2:end].^2)
     if !isempty(u)
         J += cost.R[1] * u[1]^2
+        # @info cost.R[1] * u[1]^2
     end
+    if J == NaN exit() end
+    @info "J = " J
     return J
 end
 
+qubit_cost(ψ, ψf) = min(abs(1 - ψ'ψf), abs(1 + ψ'ψf))
+
 function RD.gradient!(cost::MultiQubitSystemCost, grad, x, u)
-    if !isempty(u)
-        ForwardDiff.gradient!(grad, cost, [x; u])
-    else
-        ForwardDiff.gradient!(grad, cost, [x; 0.0])
-    end
+    ForwardDiff.gradient!(grad, cost, [x; !isempty(u) ? u : 0])
 end
 
 function RD.hessian!(cost::MultiQubitSystemCost, hess, x, u)
-    if !isempty(u)
-        ForwardDiff.hessian!(hess, cost, [x; u])
-    else
-        ForwardDiff.hessian!(hess, cost, [x; 0.0])
+    ForwardDiff.hessian!(hess, cost, [x; !isempty(u) ? u : 0])
+end
+
+#
+# quantum goal constraint
+#
+
+struct QuantumGoalConstraint <: TO.StateConstraint
+    ψfs::Vector{SVector{N,T}} where {N,T<:Number}
+    nqstates::Int
+    isodim::Int
+
+    function QuantumGoalConstraint(
+        ψfs::Vector{SVector{N,T}} ,
+    ) where {N,T<:Number}
+        nqstates = length(ψfs)
+        isodim = 2 * N
+        return new(ψfs, nqstates, isodim)
     end
 end
+
+TO.sense(::QuantumGoalConstraint) = Equality()
+
+RD.state_dim(con::QuantumGoalConstraint) = con.isodim * con.nqstates + 3
+RD.control_dim(::QuantumGoalConstraint) = 1
+RD.output_dim(::QuantumGoalConstraint) = 1
+
+(con::QuantumGoalConstraint)(x) = RD.evaluate(con, x)
+
+RD.evaluate(con::QuantumGoalConstraint, z::RD.AbstractKnotPoint) = con(RD.state(z))
+RD.evaluate!(con::QuantumGoalConstraint, c, x) = c .= con(x)
+
+function RD.evaluate(con::QuantumGoalConstraint, x)
+    ψ̃s = [x[(1 + (i-1)*con.isodim):i*con.isodim] for i = 1:con.nqstates]
+    ψs = iso_to_ket.(ψ̃s)
+    c = zeros(typeof(x[1]), 1)
+    for (ψ, ψf) in zip(ψs, con.ψfs)
+        c .+= qubit_cost(ψ, ψf)
+    end
+    return c
+end
+
+RD.jacobian!(con::QuantumGoalConstraint, jac, x) = ForwardDiff.jacobian!(jac, con, x)
+RD.jacobian!(::RD.StateOnly, con::QuantumGoalConstraint, jac, y, z::RD.AbstractKnotPoint) =
+    RD.jacobian!(con, jac, RD.state(z))
 
 end

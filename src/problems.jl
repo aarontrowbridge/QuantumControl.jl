@@ -26,6 +26,7 @@ function SingleQubitProblem(
         @assert size(H_drift)[2] == size(ψ0)[1] "Hamiltonian dimension does not match ket dimension"
         nqstates = 1
         ψf = apply(gate, ψ0)
+        ψfs = [ψf]
         ψ̃f = ket_to_iso(ψf)
         ψ̃0 = ket_to_iso(ψ0)
     else
@@ -43,7 +44,8 @@ function SingleQubitProblem(
         H_drive,
         nqstates,
         ψ̃0,
-        ψ̃f;
+        ψ̃f,
+        ψfs;
         kwargs...
     )
 end
@@ -52,8 +54,9 @@ function SingleQubitProblem(
     H_drift,                     # drift Hamiltonian
     H_drive,                     # drive Hamiltonian
     nqstates,                    # number of quantum states
-    ψ̃0,                          # initial quantum state isomorphism
-    ψ̃f;                          # final quantum state isomorphism
+    ψ̃0,                          # initial quantum state isomorphism(s)
+    ψ̃f,                          # final quantum state isomorphism(s)
+    ψfs;                         # vector final quantum states
     c0=zeros(3),                 # initial control input (∫a, a, ȧ) .= 0
     cf=zeros(3),                 # final control input (∫a, a, ȧ) .= 0
     dt=0.01,                     # time step
@@ -62,7 +65,7 @@ function SingleQubitProblem(
     Qᵢᵢ=1.0,                     # diagonal cost for state
     Rᵢᵢ=0.1,                     # diagonal cost for control
     ctrl_cost=0.5,               # control cost
-    state_cost_multiplier=1000.0, # diagonal cost for final state
+    state_cost_multiplier=100.0, # diagonal cost for final state
     ctrl_cost_multiplier=100.0,  # cost multiplier for state control variables
     dec_cost_multiplier=100.0,   # cost multiplier for decision variable
     U0=nothing,                  # initial control input
@@ -93,15 +96,15 @@ function SingleQubitProblem(
     end
 
     if fidelity_cost
-        Q = [@SVector fill(Qᵢᵢ / nqstates^2, nqstates); @SVector fill(ctrl_cost, 3)]
+        Q = [@SVector fill(Qᵢᵢ, nqstates); @SVector fill(ctrl_cost, 3)]
         R = @SVector fill(Rᵢᵢ, 1)
-        cost = MultiQubitSystemCost(Q, R, ψ̃f, nqstates, model.isodim)
-        Qf = SVector{nqstates+3}([state_cost_multiplier^nqstates * Q[1:end-3]; ctrl_cost_multiplier * Q[end-2:end]])
+        cost = MultiQubitSystemCost(ψfs; Q=Q, R=R)
+        Qf = SVector{nqstates+3}([state_cost_multiplier * Q[1:end-3]; ctrl_cost_multiplier * Q[end-2:end]])
         Rf = dec_cost_multiplier * R
         Ri = Rf
-        cost_term = MultiQubitSystemCost(Qf, Rf, ψ̃f, nqstates, model.isodim)
+        cost_term = MultiQubitSystemCost(ψfs; Q=Qf, R=Rf)
         obj = Objective(cost, cost_term, N)
-        obj.cost[1] = MultiQubitSystemCost(Q, Ri, ψ̃0, nqstates, model.isodim)
+        obj.cost[1] = MultiQubitSystemCost(ψfs; Q=Q, R=Ri)
     else
         # set up quadratic objective function
         Q = Diagonal(@SVector fill(Qᵢᵢ, n))
@@ -162,10 +165,13 @@ function SingleQubitProblem(
     end
 
     # constraint: set goal for |ψⁱₙ⟩ = |ψⁱfinal⟩
-    # if ψ̃goal
-    #     ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
-    #     add_constraint!(cons, ψ̃goalcon, N)
-    # end
+    if ψ̃goal
+        # ψ̃goalcon = GoalConstraint(xf, 1:model.nstates)
+        # add_constraint!(cons, ψ̃goalcon, N)
+
+        ψgoalcon = QuantumGoalConstraint(ψfs)
+        add_constraint!(cons, ψgoalcon, N)
+    end
 
     return Problem(
         dmodel,

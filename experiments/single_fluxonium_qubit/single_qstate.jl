@@ -25,6 +25,9 @@ T = 10.01
 N = 1001
 dt = T / N
 
+iterations = 10
+iterations_outer = 100
+
 plot_wfn = false
 
 äbound = true
@@ -32,51 +35,57 @@ äbound = true
 fidelity_cost = true
 
 # loop over all single qubit gates
-gates = [:X, :Y, :Z, :H]
+# gates = [:X, :Y, :Z, :H]
 # gates = [:X]
+gates = [:Z]
 
 solver0s = Vector{Altro.AbstractSolver}(undef, length(gates))
 solver1s = Vector{Altro.AbstractSolver}(undef, length(gates))
 
-@threads for i = 1:length(gates)
-    gate = gates[i]
+@threads for i = 1:length(gates)*2
+    if i ≤ length(gates)
+        gate = gates[i]
 
-    println("\nbeginning ALTRO solves for $gate gate...")
+        println("\nbeginning ALTRO solve for $gate gate on |0⟩...")
 
-    prob_gate_on_0 = SingleQubitProblem(
-        H_drift,
-        H_drive,
-        gate,
-        ψ0; # initial state
-        dt=dt,
-        N=N,
-        fidelity_cost=fidelity_cost,
-        äbound=äbound,
-    )
+        prob_gate_on_0 = SingleQubitProblem(
+            H_drift,
+            H_drive,
+            gate,
+            ψ0; # initial state
+            dt=dt,
+            N=N,
+            fidelity_cost=fidelity_cost,
+            äbound=äbound,
+        )
 
-    solver0 = ALTROSolver(prob_gate_on_0)
+        solver0 = ALTROSolver(prob_gate_on_0; iterations=iterations, iterations_outer=iterations_outer)
 
-    prob_gate_on_1 = SingleQubitProblem(
-        H_drift,
-        H_drive,
-        gate,
-        ψ1; # initial state
-        dt=dt,
-        N=N,
-        fidelity_cost=fidelity_cost,
-        äbound=äbound,
-    )
+        solve!(solver0)
+        println("\nsolved |0⟩ -> $gate |0⟩")
+        solver0s[i] = solver0
+    else
+        gate = gates[i - length(gates)]
 
-    solver1 = ALTROSolver(prob_gate_on_1)
+        println("\nbeginning ALTRO solve for $gate gate on |1⟩...")
 
+        prob_gate_on_1 = SingleQubitProblem(
+            H_drift,
+            H_drive,
+            gate,
+            ψ1; # initial state
+            dt=dt,
+            N=N,
+            fidelity_cost=fidelity_cost,
+            äbound=äbound,
+        )
 
-    println("\n|0⟩ -> $gate |0⟩")
-    solve!(solver0)
-    solver0s[i] = solver0
+        solver1 = ALTROSolver(prob_gate_on_1; iterations=iterations, iterations_outer=iterations_outer)
 
-    println("\n|1⟩ -> $gate |1⟩")
-    solve!(solver1)
-    solver1s[i] = solver1
+        solve!(solver1)
+        println("\nsolved |1⟩ -> $gate |1⟩")
+        solver1s[i - length(gates)] = solver1
+    end
 end
 
 println("\nplotting results...")
